@@ -17,33 +17,27 @@ def patch(fn, s, r):
 def apply_patches():
     print("Aplicando patches para OPL 1907 (Unificação de Listas)...")
 
-    # include/opl.h
-    patch("include/opl.h", 
-          "int oplScanApps(int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg);", 
-          "int oplScanApps(int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg);\nint oplScanAppsPath(char *path, int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg);")
-
-    # src/opl.c
-    patch("src/opl.c", 
-          "int oplScanApps(int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg)\n{\n    return scanApps(callback, arg, NULL, 0);\n}", 
-          "int oplScanAppsPath(char *path, int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg)\n{\n    return scanApps(callback, arg, path, 0);\n}\n\nint oplScanApps(int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg)\n{\n    return scanApps(callback, arg, NULL, 0);\n}")
-    
+    # Disable default APP menu
     patch("src/opl.c", 
           "initSupport(appGetObject(0), APP_MODE, force_reinit);", 
           "// initSupport(appGetObject(0), APP_MODE, force_reinit);")
 
-    # src/bdmsupport.c
+    # Includes
     patch("src/bdmsupport.c", 
           "#include \"include/bdmsupport.h\"", 
           "#include \"include/bdmsupport.h\"\n#include \"include/appsupport.h\"\n#include \"include/elf-loader.h\"\n#include \"include/util.h\"\n")
 
+    # Variables
     patch("src/bdmsupport.c", 
           "static char bdmDriver[5];", 
           "static char bdmDriver[5];\nstatic int bdmAppCount = 0;\nstatic app_info_t *bdmApps = NULL;\ntypedef struct { int isApp; int originalId; char name[164]; } bdm_unified_item_t;\nstatic bdm_unified_item_t *bdmUnifiedItems = NULL;\nstatic int bdmUnifiedCount = 0;\n")
 
+    # Redirect count
     patch("src/bdmsupport.c", 
           "return bdmGameCount;", 
           "return bdmUnifiedCount;")
 
+    # Redirect structs
     patch("src/bdmsupport.c", 
           "return &bdmGames[id];", 
           "if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) return &bdmApps[bdmUnifiedItems[id].originalId];\n    return &bdmGames[bdmUnifiedItems[id].originalId];")
@@ -56,8 +50,32 @@ def apply_patches():
           "return bdmGames[id].startup;", 
           "if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) return bdmApps[bdmUnifiedItems[id].originalId].boot;\n    return bdmGames[bdmUnifiedItems[id].originalId].startup;")
 
+    # Helper functions for Apps
     bdm_func = """
-static int bdmCompareItems(const void *a, const void *b) { return strcasecmp(((bdm_unified_item_t*)a)->name, ((bdm_unified_item_t*)b)->name); }
+static int bdmCompareItems(const void *a, const void *b) { return strcmp(((bdm_unified_item_t*)a)->name, ((bdm_unified_item_t*)b)->name); }
+
+static int bdmScanAppsPath(const char *appsPath, int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg) {
+    struct dirent *pdirent; DIR *pdir; struct stat st; int count = 0, ret;
+    config_set_t *appConfig; char dir[256]; char path[256];
+    if ((pdir = opendir(appsPath)) != NULL) {
+        while ((pdirent = readdir(pdir)) != NULL) {
+            if (pdirent->d_name[0] == '.') continue;
+            snprintf(dir, sizeof(dir), "%s%s", appsPath, pdirent->d_name);
+            if (stat(dir, &st) < 0 || !S_ISDIR(st.st_mode)) continue;
+            snprintf(path, sizeof(path), "%s/title.cfg", dir);
+            appConfig = configAlloc(0, NULL, path);
+            if (appConfig != NULL) {
+                configRead(appConfig);
+                ret = callback(dir, appConfig, arg);
+                configFree(appConfig);
+                if (ret >= 0) count++;
+            }
+        }
+        closedir(pdir);
+    }
+    return count;
+}
+
 static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *arg) {
     app_info_t *app; const char *title, *boot;
     if (configGetStr(appConfig, "title", &title) && configGetStr(appConfig, "boot", &boot)) {
@@ -73,6 +91,7 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
           "static void bdmLaunchGame(int id, config_set_t *configSet)", 
           bdm_func + "static void bdmLaunchGame(int id, config_set_t *configSet)")
 
+    # Launch logic
     bdm_launch = """
     if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) {
         app_info_t *app = &bdmApps[bdmUnifiedItems[id].originalId];
@@ -86,10 +105,11 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
           "static void bdmLaunchGame(int id, config_set_t *configSet)\n{", 
           "static void bdmLaunchGame(int id, config_set_t *configSet)\n{\n" + bdm_launch)
 
+    # Update logic
     bdm_update = """
     if (bdmApps) free(bdmApps); bdmApps = NULL; bdmAppCount = 0;
     char appPath[64]; snprintf(appPath, sizeof(appPath), "%sAPPS/", bdmPrefix);
-    oplScanAppsPath(appPath, bdmAppScanCallback, NULL);
+    bdmScanAppsPath(appPath, bdmAppScanCallback, NULL);
     if (bdmUnifiedItems) free(bdmUnifiedItems); bdmUnifiedItems = NULL; bdmUnifiedCount = 0;
     bdmUnifiedCount = bdmGameCount + bdmAppCount;
     if (bdmUnifiedCount > 0) {
@@ -112,6 +132,7 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
           "static int bdmUpdateGameList(void)\n{\n    sbReadList(&bdmGames, bdmPrefix, &bdmULSizePrev, &bdmGameCount);\n    return bdmGameCount;\n}", 
           "static int bdmUpdateGameList(void)\n{\n    sbReadList(&bdmGames, bdmPrefix, &bdmULSizePrev, &bdmGameCount);\n" + bdm_update + "\n    return bdmUnifiedCount;\n}")
 
+    # Memory cleanup
     patch("src/bdmsupport.c", 
           "free(bdmGames);", 
           "free(bdmGames); bdmGames = NULL;\n        if (bdmApps) { free(bdmApps); bdmApps = NULL; }\n        if (bdmUnifiedItems) { free(bdmUnifiedItems); bdmUnifiedItems = NULL; }")
