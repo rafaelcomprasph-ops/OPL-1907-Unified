@@ -70,8 +70,8 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
 }
 """
     patch("src/bdmsupport.c", 
-          "static void bdmLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)", 
-          bdm_func + "static void bdmLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)")
+          "static void bdmLaunchGame(int id, config_set_t *configSet)", 
+          bdm_func + "static void bdmLaunchGame(int id, config_set_t *configSet)")
 
     bdm_launch = """
     if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) {
@@ -83,8 +83,8 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
     }
 """
     patch("src/bdmsupport.c", 
-          "void bdmLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)\n{", 
-          "void bdmLaunchGame(item_list_t *itemList, int id, config_set_t *configSet)\n{\n" + bdm_launch)
+          "static void bdmLaunchGame(int id, config_set_t *configSet)\n{", 
+          "static void bdmLaunchGame(int id, config_set_t *configSet)\n{\n" + bdm_launch)
 
     bdm_update = """
     if (bdmApps) free(bdmApps); bdmApps = NULL; bdmAppCount = 0;
@@ -109,12 +109,12 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
     }
 """
     patch("src/bdmsupport.c", 
-          "return 1;\n}", 
-          bdm_update + "\n    return 1;\n}")
+          "static int bdmUpdateGameList(void)\n{\n    sbReadList(&bdmGames, bdmPrefix, &bdmULSizePrev, &bdmGameCount);\n    return bdmGameCount;\n}", 
+          "static int bdmUpdateGameList(void)\n{\n    sbReadList(&bdmGames, bdmPrefix, &bdmULSizePrev, &bdmGameCount);\n" + bdm_update + "\n    return bdmUnifiedCount;\n}")
 
     patch("src/bdmsupport.c", 
-          "if (bdmGames) {\n        free(bdmGames);\n        bdmGames = NULL;\n    }", 
-          "if (bdmGames) { free(bdmGames); bdmGames = NULL; }\n    if (bdmApps) { free(bdmApps); bdmApps = NULL; }\n    if (bdmUnifiedItems) { free(bdmUnifiedItems); bdmUnifiedItems = NULL; }")
+          "free(bdmGames);", 
+          "free(bdmGames); bdmGames = NULL;\n        if (bdmApps) { free(bdmApps); bdmApps = NULL; }\n        if (bdmUnifiedItems) { free(bdmUnifiedItems); bdmUnifiedItems = NULL; }")
 
     print("Patches finalizados!")
 
