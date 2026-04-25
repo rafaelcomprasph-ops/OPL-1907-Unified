@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ps2dev/ps2dev:v1.0  # VERSÃO 1.0 (CONFIRMADA)
+    container: ps2dev/ps2dev:v1.0
 
     steps:
       - name: Checkout Custom Repo (Patches)
@@ -22,6 +22,10 @@ jobs:
           repository: ps2homebrew/Open-PS2-Loader
           ref: 48e2d132532088aaba8e82c7149e4c4164d0ac64
           path: Open-PS2-Loader
+
+      - name: Install Python (Necessário para o Patch)
+        run: |
+          apt-get update && apt-get install -y python3
 
       - name: Apply Unified Menu Patch
         run: |
