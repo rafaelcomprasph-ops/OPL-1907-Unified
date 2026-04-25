@@ -1,4 +1,4 @@
-name: Build OPL Unified 2022 (Modern Build)
+name: Build OPL Unified 2022 (Fixed)
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ps2dev/ps2dev:latest  # VOLTAMOS PARA A LATEST (TEM TUDO)
+    container: ps2dev/ps2dev:latest
 
     steps:
       - name: Checkout Custom Repo
@@ -15,28 +15,23 @@ jobs:
         with:
           path: custom_repo
 
-      - name: Checkout OPL Source
+      - name: Checkout OPL Source (2022)
         uses: actions/checkout@v4
         with:
           repository: ps2homebrew/Open-PS2-Loader
           ref: 48e2d132532088aaba8e82c7149e4c4164d0ac64
           path: Open-PS2-Loader
 
-      - name: Apply Unified Menu Patch
-        run: |
-          cp custom_repo/patch_opl_1907.py Open-PS2-Loader/
-          cd Open-PS2-Loader
-          python3 patch_opl_1907.py
-
-      - name: Force Legacy Compatibility (GCC 14 Fix)
-        run: |
-          # Essas linhas ensinam o compilador novo a aceitar o código de 2022
-          sed -i 's/EE_CFLAGS :=/EE_CFLAGS := -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration /' Open-PS2-Loader/Makefile
-          sed -i 's/IOP_CFLAGS :=/IOP_CFLAGS := -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration /' Open-PS2-Loader/Makefile
-
       - name: Build OPL
         run: |
           cd Open-PS2-Loader
+          # Aplicar o patch usando o python que já vem na imagem
+          python3 ../custom_repo/patch_opl_1907.py
+          
+          # Forçar compatibilidade com código antigo
+          export EE_CFLAGS="-Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration"
+          export IOP_CFLAGS="-Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration"
+          
           make clean
           make -j$(nproc)
 
