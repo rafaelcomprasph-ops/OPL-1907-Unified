@@ -14,11 +14,15 @@ def patch(fn, s, r):
         print(f'ERRO em {fn}: {e}')
 
 def apply_patches():
-    print('Iniciando Kit de Sobrevivência Final OPL 1907...')
+    print('Iniciando Kit de Sobrevivência FINALISSIMO OPL 1907...')
 
-    # 1. Fix GCC 14 (Vacina global)
+    # 1. Fix GCC 14 e iopfixup (Ajustes de ambiente)
+    # Adicionamos --allow-zero-text para o erro do _retonly
     os.system('echo "IOP_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal')
     os.system('echo "EE_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.eeglobal')
+    
+    # Patch direto no Makefile do SDK para aceitar o zero-text
+    patch('/usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal', 'iopfixup ', 'iopfixup --allow-zero-text ')
 
     # 2. Criar bin2s
     bin2s_script = '#!/bin/bash\necho ".section .data" > "$2"\necho ".global $3" >> "$2"\necho "$3:" >> "$2"\necho ".incbin \\"$1\\"" >> "$2"\n'
@@ -26,17 +30,11 @@ def apply_patches():
         f.write(bin2s_script)
     os.chmod('/usr/local/ps2dev/ps2sdk/bin/bin2s', 0o755)
 
-    # 3. CORREÇÃO CRÍTICA: scmd.c (Conflito de tipos do PS2SDK novo)
-    print('Corrigindo tipos em scmd.c...')
-    patch('modules/iopcore/cdvdman/scmd.c', 
-          'int sceCdReadModelID(unsigned long int *ModelID)', 
-          'int sceCdReadModelID(unsigned int *ModelID)')
-    patch('modules/iopcore/cdvdman/scmd.c', 
-          'int sceCdReadDvdDualInfo(int *on_dual, u32 *layer1_start)', 
-          'int sceCdReadDvdDualInfo(int *on_dual, unsigned int *layer1_start)')
+    # 3. Correção de tipos em scmd.c
+    patch('modules/iopcore/cdvdman/scmd.c', 'int sceCdReadModelID(unsigned long int *ModelID)', 'int sceCdReadModelID(unsigned int *ModelID)')
+    patch('modules/iopcore/cdvdman/scmd.c', 'int sceCdReadDvdDualInfo(int *on_dual, u32 *layer1_start)', 'int sceCdReadDvdDualInfo(int *on_dual, unsigned int *layer1_start)')
 
     # 4. Patches de Unificação do Menu
-    print('Aplicando patches de unificação...')
     patch('src/opl.c', 'initSupport(appGetObject(0), APP_MODE, force_reinit);', '// initSupport(appGetObject(0), APP_MODE, force_reinit);')
     patch('src/bdmsupport.c', '#include "include/bdmsupport.h"', '#include "include/bdmsupport.h"\n#include "include/appsupport.h"\n#include "include/elf-loader.h"\n#include "include/util.h"')
     patch('src/bdmsupport.c', 'static char bdmDriver[5];', 'static char bdmDriver[5];\nstatic int bdmAppCount = 0;\nstatic app_info_t *bdmApps = NULL;\ntypedef struct { int isApp; int originalId; char name[164]; } bdm_unified_item_t;\nstatic bdm_unified_item_t *bdmUnifiedItems = NULL;\nstatic int bdmUnifiedCount = 0;')
@@ -94,7 +92,7 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
     patch('src/bdmsupport.c', 'return bdmGameCount;\n}', 'return bdmUnifiedCount;\n}')
     patch('src/bdmsupport.c', 'free(bdmGames);', 'free(bdmGames); bdmGames = NULL; if (bdmApps) { free(bdmApps); bdmApps = NULL; } if (bdmUnifiedItems) { free(bdmUnifiedItems); bdmUnifiedItems = NULL; }')
 
-    print('Kit de Sobrevivência Final aplicado!')
+    print('Kit de Sobrevivência aplicado! Cruzando os dedos para o download do ELF!')
 
 if __name__ == "__main__":
     apply_patches()
