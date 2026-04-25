@@ -14,37 +14,37 @@ def patch(fn, s, r):
         print(f'ERRO em {fn}: {e}')
 
 def apply_patches():
-    print('Iniciando Kit de Sobrevivência OPL 1907...')
+    print('Iniciando Kit de Sobrevivência Final OPL 1907...')
 
     # 1. Fix GCC 14 (Vacina global)
-    print('Aplicando vacina contra GCC 14...')
     os.system('echo "IOP_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal')
     os.system('echo "EE_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.eeglobal')
 
-    # 2. Criar bin2s (Ferramenta que sumiu no ambiente novo)
-    print('Recriando ferramenta bin2s...')
+    # 2. Criar bin2s
     bin2s_script = '#!/bin/bash\necho ".section .data" > "$2"\necho ".global $3" >> "$2"\necho "$3:" >> "$2"\necho ".incbin \\"$1\\"" >> "$2"\n'
     with open('/usr/local/ps2dev/ps2sdk/bin/bin2s', 'w') as f:
         f.write(bin2s_script)
     os.chmod('/usr/local/ps2dev/ps2sdk/bin/bin2s', 0o755)
 
-    # 3. Patches de Unificação do Menu
-    print('Aplicando patches de unificação...')
-    
-    # Disable default APP menu
-    patch('src/opl.c', 'initSupport(appGetObject(0), APP_MODE, force_reinit);', '// initSupport(appGetObject(0), APP_MODE, force_reinit);')
+    # 3. CORREÇÃO CRÍTICA: scmd.c (Conflito de tipos do PS2SDK novo)
+    print('Corrigindo tipos em scmd.c...')
+    patch('modules/iopcore/cdvdman/scmd.c', 
+          'int sceCdReadModelID(unsigned long int *ModelID)', 
+          'int sceCdReadModelID(unsigned int *ModelID)')
+    patch('modules/iopcore/cdvdman/scmd.c', 
+          'int sceCdReadDvdDualInfo(int *on_dual, u32 *layer1_start)', 
+          'int sceCdReadDvdDualInfo(int *on_dual, unsigned int *layer1_start)')
 
-    # Includes e Variáveis no bdmsupport.c
+    # 4. Patches de Unificação do Menu
+    print('Aplicando patches de unificação...')
+    patch('src/opl.c', 'initSupport(appGetObject(0), APP_MODE, force_reinit);', '// initSupport(appGetObject(0), APP_MODE, force_reinit);')
     patch('src/bdmsupport.c', '#include "include/bdmsupport.h"', '#include "include/bdmsupport.h"\n#include "include/appsupport.h"\n#include "include/elf-loader.h"\n#include "include/util.h"')
     patch('src/bdmsupport.c', 'static char bdmDriver[5];', 'static char bdmDriver[5];\nstatic int bdmAppCount = 0;\nstatic app_info_t *bdmApps = NULL;\ntypedef struct { int isApp; int originalId; char name[164]; } bdm_unified_item_t;\nstatic bdm_unified_item_t *bdmUnifiedItems = NULL;\nstatic int bdmUnifiedCount = 0;')
-
-    # Redirecionamentos
     patch('src/bdmsupport.c', 'return bdmGameCount;', 'return bdmUnifiedCount;')
     patch('src/bdmsupport.c', 'return &bdmGames[id];', 'if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) return &bdmApps[bdmUnifiedItems[id].originalId];\n    return &bdmGames[bdmUnifiedItems[id].originalId];')
     patch('src/bdmsupport.c', 'return bdmGames[id].name;', 'if (bdmUnifiedItems) return bdmUnifiedItems[id].name;\n    return bdmGames[id].name;')
     patch('src/bdmsupport.c', 'return bdmGames[id].startup;', 'if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) return bdmApps[bdmUnifiedItems[id].originalId].boot;\n    return bdmGames[bdmUnifiedItems[id].originalId].startup;')
 
-    # Funções auxiliares
     bdm_helpers = """
 static int bdmCompareItems(const void *a, const void *b) { return strcmp(((bdm_unified_item_t*)a)->name, ((bdm_unified_item_t*)b)->name); }
 static int bdmScanAppsPath(const char *appsPath, int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg) {
@@ -73,7 +73,6 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
 }
 """
     patch('src/bdmsupport.c', 'static void bdmLaunchGame(int id, config_set_t *configSet)', bdm_helpers + 'static void bdmLaunchGame(int id, config_set_t *configSet)')
-    
     bdm_launch = '    if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) { app_info_t *app = &bdmApps[bdmUnifiedItems[id].originalId]; char path[256]; snprintf(path, sizeof(path), "%sAPPS/%s", bdmPrefix, app->boot); deinit(NO_EXCEPTION, -1); LoadELFFromFileWithPartition(path, "", 0, NULL); return; }'
     patch('src/bdmsupport.c', 'static void bdmLaunchGame(int id, config_set_t *configSet)\n{', 'static void bdmLaunchGame(int id, config_set_t *configSet)\n{\n' + bdm_launch)
 
@@ -93,11 +92,9 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
 """
     patch('src/bdmsupport.c', 'sbReadList(&bdmGames, bdmPrefix, &bdmULSizePrev, &bdmGameCount);', 'sbReadList(&bdmGames, bdmPrefix, &bdmULSizePrev, &bdmGameCount);' + bdm_update)
     patch('src/bdmsupport.c', 'return bdmGameCount;\n}', 'return bdmUnifiedCount;\n}')
-
-    # Limpeza de Memória
     patch('src/bdmsupport.c', 'free(bdmGames);', 'free(bdmGames); bdmGames = NULL; if (bdmApps) { free(bdmApps); bdmApps = NULL; } if (bdmUnifiedItems) { free(bdmUnifiedItems); bdmUnifiedItems = NULL; }')
 
-    print('Kit de Sobrevivência aplicado com sucesso!')
+    print('Kit de Sobrevivência Final aplicado!')
 
 if __name__ == "__main__":
     apply_patches()
