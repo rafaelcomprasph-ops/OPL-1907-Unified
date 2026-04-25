@@ -22,16 +22,29 @@ jobs:
           ref: 48e2d132532088aaba8e82c7149e4c4164d0ac64
           path: Open-PS2-Loader
 
-      - name: Build OPL
+      - name: Apply Unified Menu Patch (sem Python)
+        working-directory: Open-PS2-Loader
         run: |
-          cd Open-PS2-Loader
-          # Aplicar o patch usando o python que já vem na imagem
-          python3 ../custom_repo/patch_opl_1907.py
-          
-          # Forçar compatibilidade com código antigo
+          # 1. Desativar o menu de Apps separado
+          sed -i 's/initSupport(appGetObject(0), APP_MODE, force_reinit);/\/\/ initSupport(appGetObject(0), APP_MODE, force_reinit);/' src/opl.c
+
+          # 2. Adicionar includes necessarios
+          sed -i '/#include "include\/bdmsupport.h"/a #include "include/appsupport.h"\n#include "include/elf-loader.h"' src/bdmsupport.c
+
+          # 3. Injetar variaveis da lista unificada apos bdmGameCount
+          sed -i '/^static int bdmGameCount = 0;/a static int bdmAppCount = 0;\nstatic app_info_t *bdmApps = NULL;\ntypedef struct { int isApp; int originalId; char name[164]; } bdm_unified_item_t;\nstatic bdm_unified_item_t *bdmUnifiedItems = NULL;\nstatic int bdmUnifiedCount = 0;' src/bdmsupport.c
+
+          # 4. Redirecionar contagem para a lista unificada
+          sed -i 's/return bdmGameCount;/return bdmUnifiedCount;/' src/bdmsupport.c
+
+          # 5. Redirecionar nomes para a lista unificada
+          sed -i 's/return bdmGames\[id\]\.name;/if (bdmUnifiedItems) return bdmUnifiedItems[id].name;\n    return bdmGames[id].name;/' src/bdmsupport.c
+
+      - name: Build OPL
+        working-directory: Open-PS2-Loader
+        run: |
           export EE_CFLAGS="-Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration"
           export IOP_CFLAGS="-Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration"
-          
           make clean
           make -j$(nproc)
 
