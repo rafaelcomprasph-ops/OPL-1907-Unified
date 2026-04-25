@@ -8,16 +8,16 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ps2dev/ps2dev:v1.1.0
+    container: ps2dev/ps2dev:v1.0  # VERSÃO 1.0 (CONFIRMADA)
 
     steps:
       - name: Checkout Custom Repo (Patches)
-        uses: actions/checkout@v4  # Atualizado para v4
+        uses: actions/checkout@v4
         with:
           path: custom_repo
 
       - name: Checkout OPL Source (Version 48e2d13)
-        uses: actions/checkout@v4  # Atualizado para v4
+        uses: actions/checkout@v4
         with:
           repository: ps2homebrew/Open-PS2-Loader
           ref: 48e2d132532088aaba8e82c7149e4c4164d0ac64
@@ -36,7 +36,7 @@ jobs:
           make -j$(nproc)
 
       - name: Upload OPNPS2LD.ELF
-        uses: actions/upload-artifact@v4  # ATUALIZADO PARA V4
+        uses: actions/upload-artifact@v4
         with:
           name: OPL-Unified-2022
           path: Open-PS2-Loader/OPNPS2LD.ELF
