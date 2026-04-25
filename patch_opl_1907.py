@@ -1,5 +1,4 @@
 import os
-import sys
 
 def patch(fn, s, r):
     try:
@@ -14,63 +13,27 @@ def patch(fn, s, r):
         print(f'ERRO em {fn}: {e}')
 
 def apply_patches():
-    print('Iniciando Kit de Sobrevivência FINAL OPL 1907...')
+    print('Aplicando Menu Unificado na Versão 48e2d13...')
 
-    # 1. Ajustes Globais (GCC 14 e iopfixup)
-    os.system('echo "IOP_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal')
-    os.system('echo "EE_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.eeglobal')
-    patch('/usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal', 'iopfixup ', 'iopfixup --allow-zero-text ')
-
-    # 2. Criar bin2s (Necessário para os ícones e fontes)
-    bin2s_script = '#!/bin/bash\necho ".section .data" > "$2"\necho ".global $3" >> "$2"\necho "$3:" >> "$2"\necho ".incbin \\"$1\\"" >> "$2"\n'
-    with open('/usr/local/ps2dev/ps2sdk/bin/bin2s', 'w') as f:
-        f.write(bin2s_script)
-    os.chmod('/usr/local/ps2dev/ps2sdk/bin/bin2s', 0o755)
-
-    # 3. CORREÇÃO DE DISCO (Injeção direta em dev9.c para matar o erro de undefined reference)
-    print('Injetando correções de compatibilidade em dev9.c...')
-    dev9_fix = """
-/* Correções de compatibilidade PS2SDK Novo */
-int SpdIntrDisable(int irq) { return 0; }
-int SpdRegisterIntrHandler(int irq, void *handler, void *arg) { return 0; }
-int Dev9RegisterPowerOffHandler(int priority, void *handler, void *arg) { return 0; }
-void SpdSetLED(int state) {}
-int SpdIntrEnable(int irq) { return 0; }
-void SpdDmaTransfer(int channel, void *buf, int size, int direction) {}
-"""
-    with open('modules/iopcore/cdvdman/dev9.c', 'a') as f:
-        f.write(dev9_fix)
-
-    # 4. Correção de tipos em scmd.c
-    patch('modules/iopcore/cdvdman/scmd.c', 'int sceCdReadModelID(unsigned long int *ModelID)', 'int sceCdReadModelID(unsigned int *ModelID)')
-    patch('modules/iopcore/cdvdman/scmd.c', 'int sceCdReadDvdDualInfo(int *on_dual, u32 *layer1_start)', 'int sceCdReadDvdDualInfo(int *on_dual, unsigned int *layer1_start)')
-
-    # 5. Patches de Unificação do Menu
+    # 1. Desativar o menu de Apps original para evitar duplicidade
     patch('src/opl.c', 'initSupport(appGetObject(0), APP_MODE, force_reinit);', '// initSupport(appGetObject(0), APP_MODE, force_reinit);')
-    patch('src/bdmsupport.c', '#include "include/bdmsupport.h"', '#include "include/bdmsupport.h"\n#include "include/appsupport.h"\n#include "include/elf-loader.h"\n#include "include/util.h"')
-    patch('src/bdmsupport.c', 'static char bdmDriver[5];', 'static char bdmDriver[5];\nstatic int bdmAppCount = 0;\nstatic app_info_t *bdmApps = NULL;\ntypedef struct { int isApp; int originalId; char name[164]; } bdm_unified_item_t;\nstatic bdm_unified_item_t *bdmUnifiedItems = NULL;\nstatic int bdmUnifiedCount = 0;')
-    patch('src/bdmsupport.c', 'return bdmGameCount;', 'return bdmUnifiedCount;')
-    patch('src/bdmsupport.c', 'return &bdmGames[id];', 'if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) return &bdmApps[bdmUnifiedItems[id].originalId];\n    return &bdmGames[bdmUnifiedItems[id].originalId];')
-    patch('src/bdmsupport.c', 'return bdmGames[id].name;', 'if (bdmUnifiedItems) return bdmUnifiedItems[id].name;\n    return bdmGames[id].name;')
-    patch('src/bdmsupport.c', 'return bdmGames[id].startup;', 'if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) return bdmApps[bdmUnifiedItems[id].originalId].boot;\n    return bdmGames[bdmUnifiedItems[id].originalId].startup;')
 
-    bdm_helpers = """
-static int bdmCompareItems(const void *a, const void *b) { return strcmp(((bdm_unified_item_t*)a)->name, ((bdm_unified_item_t*)b)->name); }
-static int bdmScanAppsPath(const char *appsPath, int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg) {
-    struct dirent *pdirent; DIR *pdir; struct stat st;
-    config_set_t *appConfig; char dir[256]; char path[256];
-    if ((pdir = opendir(appsPath)) != NULL) {
-        while ((pdirent = readdir(pdir)) != NULL) {
-            if (pdirent->d_name[0] == '.') continue;
-            snprintf(dir, sizeof(dir), "%s%s", appsPath, pdirent->d_name);
-            if (stat(dir, &st) < 0 || !S_ISDIR(st.st_mode)) continue;
-            snprintf(path, sizeof(path), "%s/title.cfg", dir);
-            appConfig = configAlloc(0, NULL, path);
-            if (appConfig != NULL) { configRead(appConfig); bdmAppScanCallback(dir, appConfig, arg); configFree(appConfig); }
-        }
-        closedir(pdir);
-    } return 0;
-}
+    # 2. Preparar o arquivo bdmsupport.c
+    patch('src/bdmsupport.c', '#include "include/bdmsupport.h"', '#include "include/bdmsupport.h"\\n#include "include/appsupport.h"\\n#include "include/elf-loader.h"\\n#include "include/util.h"')
+    
+    # Injetar estruturas de controle
+    vars_unified = """
+static int bdmAppCount = 0;
+static app_info_t *bdmApps = NULL;
+typedef struct { int isApp; int originalId; char name[164]; } bdm_unified_item_t;
+static bdm_unified_item_t *bdmUnifiedItems = NULL;
+static int bdmUnifiedCount = 0;
+"""
+    patch('src/bdmsupport.c', 'static int bdmGameCount = 0;', 'static int bdmGameCount = 0;' + vars_unified)
+
+    # Injetar ajudantes (Scan de Apps e Comparação)
+    helpers = """
+static int bdmCompareItems(const void *a, const void *b) { return strcasecmp(((bdm_unified_item_t*)a)->name, ((bdm_unified_item_t*)b)->name); }
 static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *arg) {
     app_info_t *app; const char *title, *boot;
     if (configGetStr(appConfig, "title", &title) && configGetStr(appConfig, "boot", &boot)) {
@@ -81,15 +44,27 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
     } return 1;
 }
 """
-    patch('src/bdmsupport.c', 'static void bdmLaunchGame(int id, config_set_t *configSet)', bdm_helpers + 'static void bdmLaunchGame(int id, config_set_t *configSet)')
-    bdm_launch = '    if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) { app_info_t *app = &bdmApps[bdmUnifiedItems[id].originalId]; char path[256]; snprintf(path, sizeof(path), "%sAPPS/%s", bdmPrefix, app->boot); deinit(NO_EXCEPTION, -1); LoadELFFromFileWithPartition(path, "", 0, NULL); return; }'
-    patch('src/bdmsupport.c', 'static void bdmLaunchGame(int id, config_set_t *configSet)\n{', 'static void bdmLaunchGame(int id, config_set_t *configSet)\n{\n' + bdm_launch)
+    patch('src/bdmsupport.c', 'static void bdmLaunchGame(int id, config_set_t *configSet)', helpers + 'static void bdmLaunchGame(int id, config_set_t *configSet)')
 
-    bdm_update = """
+    # 3. Lógica de Lançamento (Boot)
+    boot_logic = """
+    if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) {
+        app_info_t *app = &bdmApps[bdmUnifiedItems[id].originalId];
+        char path[256]; snprintf(path, sizeof(path), "%sAPPS/%s", bdmPrefix, app->boot);
+        deinit(NO_EXCEPTION, -1);
+        LoadELFFromFileWithPartition(path, "", 0, NULL);
+        return;
+    }
+"""
+    patch('src/bdmsupport.c', 'base_game_info_t *game = &bdmGames[id];', boot_logic + '    base_game_info_t *game = &bdmGames[bdmUnifiedItems[id].originalId];')
+
+    # 4. Lógica de Atualização da Lista (Merge)
+    merge_logic = """
     if (bdmApps) free(bdmApps); bdmApps = NULL; bdmAppCount = 0;
     char appPath[64]; snprintf(appPath, sizeof(appPath), "%sAPPS/", bdmPrefix);
-    bdmScanAppsPath(appPath, NULL, NULL);
-    if (bdmUnifiedItems) free(bdmUnifiedItems); bdmUnifiedItems = NULL; bdmUnifiedCount = 0;
+    extern int oplScanAppsPath(char *path, int (*callback)(const char *path, config_set_t *appConfig, void *arg), void *arg);
+    oplScanAppsPath(appPath, &bdmAppScanCallback, NULL);
+    if (bdmUnifiedItems) free(bdmUnifiedItems);
     bdmUnifiedCount = bdmGameCount + bdmAppCount;
     if (bdmUnifiedCount > 0) {
         bdmUnifiedItems = malloc(bdmUnifiedCount * sizeof(bdm_unified_item_t));
@@ -99,11 +74,16 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
         qsort(bdmUnifiedItems, bdmUnifiedCount, sizeof(bdm_unified_item_t), bdmCompareItems);
     }
 """
-    patch('src/bdmsupport.c', 'sbReadList(&bdmGames, bdmPrefix, &bdmULSizePrev, &bdmGameCount);', 'sbReadList(&bdmGames, bdmPrefix, &bdmULSizePrev, &bdmGameCount);' + bdm_update)
-    patch('src/bdmsupport.c', 'return bdmGameCount;\n}', 'return bdmUnifiedCount;\n}')
-    patch('src/bdmsupport.c', 'free(bdmGames);', 'free(bdmGames); bdmGames = NULL; if (bdmApps) { free(bdmApps); bdmApps = NULL; } if (bdmUnifiedItems) { free(bdmUnifiedItems); bdmUnifiedItems = NULL; }')
+    patch('src/bdmsupport.c', 'sbReadList(&bdmGames, bdmPrefix, &bdmULSizePrev, &bdmGameCount);', 'sbReadList(&bdmGames, bdmPrefix, &bdmULSizePrev, &bdmGameCount);' + merge_logic)
 
-    print('Kit de Sobrevivência aplicado! O ELF está a caminho!')
+    # 5. Redirecionar funções da lista para a lista unificada
+    patch('src/bdmsupport.c', 'return bdmGameCount;', 'return bdmUnifiedCount;')
+    patch('src/bdmsupport.c', 'return (void *)&bdmGames[id];', 'if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) return &bdmApps[bdmUnifiedItems[id].originalId];\\n    return &bdmGames[bdmUnifiedItems[id].originalId];')
+    patch('src/bdmsupport.c', 'return bdmGames[id].name;', 'if (bdmUnifiedItems) return bdmUnifiedItems[id].name;\\n    return bdmGames[id].name;')
+    patch('src/bdmsupport.c', 'return bdmGames[id].startup;', 'if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) return bdmApps[bdmUnifiedItems[id].originalId].boot;\\n    return bdmGames[bdmUnifiedItems[id].originalId].startup;')
+    patch('src/bdmsupport.c', 'return sbPopulateConfig(&bdmGames[id], bdmPrefix, "/");', 'if (bdmUnifiedItems && bdmUnifiedItems[id].isApp) return NULL; // TODO: App Config\\n    return sbPopulateConfig(&bdmGames[bdmUnifiedItems[id].originalId], bdmPrefix, "/");')
+
+    print('Patch para versão 48e2d13 aplicado com sucesso!')
 
 if __name__ == "__main__":
     apply_patches()
