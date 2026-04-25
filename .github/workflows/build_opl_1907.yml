@@ -31,8 +31,15 @@ jobs:
           git init
           git add .
           git commit -m "build"
-          echo '#!/bin/sh' > download_lng.sh
+
+          # Criar script real que baixa os idiomas do repositório oficial
+          cat > download_lng.sh << 'SCRIPT'
+          #!/bin/sh
+          mkdir -p lng_src
+          curl -L "https://github.com/ps2homebrew/OPL-Translations/archive/refs/heads/main.tar.gz" | tar -xz --strip-components=2 -C lng_src "OPL-Translations-main/translations/" 2>/dev/null || true
+          SCRIPT
           chmod +x download_lng.sh
+
           sed -i 's/initSupport(appGetObject(0), APP_MODE, force_reinit);//' src/opl.c
           make clean
           make -j$(nproc)
