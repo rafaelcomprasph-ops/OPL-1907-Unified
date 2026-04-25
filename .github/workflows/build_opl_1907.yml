@@ -29,12 +29,11 @@ jobs:
           git config --global user.email "build@ci.com"
           git config --global user.name "CI"
           git init && git add . && git commit -m "build"
-
-          # Gerar arquivos de linguagem necessários para compilação
           python3 lang_compiler.py --make_header --base lng_tmpl/_base.yml include/lang_autogen.h
           python3 lang_compiler.py --make_source --base lng_tmpl/_base.yml src/lang_internal.c
-
           sed -i 's/initSupport(appGetObject(0), APP_MODE, force_reinit);//' src/opl.c
+          export EE_CFLAGS="-Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration"
+          export IOP_CFLAGS="-Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration"
           make clean
           make -j$(nproc) OPNPS2LD.ELF
 
