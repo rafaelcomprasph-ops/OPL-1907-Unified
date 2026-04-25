@@ -15,18 +15,7 @@ def patch(fn, s, r):
         print(f"ERRO ao processar {fn}: {e}")
 
 def apply_patches():
-    print("Aplicando patches para OPL 1907 (Unificação de Listas + Correção GCC 14)...")
-
-    # Fix GCC 14 compatibility globally in PS2SDK
-    print("Aplicando fix global para o GCC 14 no PS2SDK...")
-    try:
-        with open("/usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal", "a") as f:
-            f.write("\nIOP_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration\n")
-        with open("/usr/local/ps2dev/ps2sdk/samples/Makefile.eeglobal", "a") as f:
-            f.write("\nEE_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration\n")
-        print("Fix do PS2SDK aplicado com sucesso!")
-    except Exception as e:
-        print(f"Aviso: Não foi possível aplicar o fix no PS2SDK: {e}")
+    print("Aplicando patches para OPL 1907 (Unificação de Listas)...")
 
     # Disable default APP menu
     patch("src/opl.c", 
