@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
-          apk add build-base git python3 curl wget bash
+          apk add build-base git python3 curl wget bash py3-yaml
 
       - name: Checkout custom scripts
         uses: actions/checkout@v4
