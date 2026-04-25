@@ -24,7 +24,7 @@ jobs:
 
       - name: Install and Build
         run: |
-          apk add --no-cache make git
+          apk add --no-cache make git python3 py3-yaml
           cd Open-PS2-Loader
           git config --global user.email "build@ci.com"
           git config --global user.name "CI"
