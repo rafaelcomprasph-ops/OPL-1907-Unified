@@ -1,23 +1,44 @@
-      - name: Install + Patch + Build
+name: Build OPL Unified 2022
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ps2dev/ps2dev:latest
+
+    steps:
+      - name: Checkout Custom Repo
+        uses: actions/checkout@v4
+        with:
+          path: custom_repo
+
+      - name: Checkout OPL Source
+        uses: actions/checkout@v4
+        with:
+          repository: ps2homebrew/Open-PS2-Loader
+          ref: 48e2d132532088aaba8e82c7149e4c4164d0ac64
+          path: Open-PS2-Loader
+
+      - name: Install and Build
         run: |
           apk add --no-cache make python3 git curl
           cd Open-PS2-Loader
-
-          # Fix 1: Criar repo git para o Makefile detectar versão
           git config --global user.email "build@ci.com"
           git config --global user.name "CI"
           git init
           git add .
           git commit -m "build"
-
-          # Fix 2: Criar script de idiomas vazio (não precisamos de idiomas agora)
           echo '#!/bin/sh' > download_lng.sh
           chmod +x download_lng.sh
-
-          # Patches do Menu Unificado
-          sed -i 's/initSupport(appGetObject(0), APP_MODE, force_reinit);/\/\/ initSupport(appGetObject(0), APP_MODE, force_reinit);/' src/opl.c
-          sed -i 's/return bdmGameCount;/return bdmUnifiedCount;/' src/bdmsupport.c
-
-          # Compilar!
+          sed -i 's/initSupport(appGetObject(0), APP_MODE, force_reinit);//' src/opl.c
           make clean
           make -j$(nproc)
+
+      - name: Upload OPNPS2LD.ELF
+        uses: actions/upload-artifact@v4
+        with:
+          name: OPL-Unified-2022
+          path: Open-PS2-Loader/OPNPS2LD.ELF
