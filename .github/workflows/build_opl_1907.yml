@@ -1,50 +1,42 @@
-name: Compilar OPL 1907 (Unificado)
+name: Build OPL Unified 2022
 
 on:
-  workflow_dispatch:
   push:
-    paths:
-      - 'patch_opl_1907.py'
-      - '.github/workflows/build_opl_1907.yml'
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ps2dev/ps2dev:latest
-    
-    steps:
-      - name: Install dependencies
-        run: |
-          apk add build-base git python3 curl wget bash py3-yaml
+    container: ps2dev/ps2dev:v1.1.0  # USANDO O COMPILADOR COMPATÍVEL DE 2022
 
-      - name: Checkout custom scripts
-        uses: actions/checkout@v4
+    steps:
+      - name: Checkout Custom Repo (Patches)
+        uses: actions/checkout@v3
         with:
           path: custom_repo
 
-      - name: Clone OPL repository
-        run: |
-          git clone https://github.com/ps2homebrew/Open-PS2-Loader.git
-          cd Open-PS2-Loader
-          git checkout 48e2d132532088aaba8e82c7149e4c4164d0ac64
-          git submodule update --init --recursive
+      - name: Checkout OPL Source (Version 48e2d13)
+        uses: actions/checkout@v3
+        with:
+          repository: ps2homebrew/Open-PS2-Loader
+          ref: 48e2d132532088aaba8e82c7149e4c4164d0ac64 # A VERSÃO DO SEU LINK
+          path: Open-PS2-Loader
 
-      - name: Apply Unified Menu Patches
+      - name: Apply Unified Menu Patch
         run: |
           cp custom_repo/patch_opl_1907.py Open-PS2-Loader/
           cd Open-PS2-Loader
           python3 patch_opl_1907.py
 
-      - name: Compile OPL
+      - name: Build OPL
         run: |
           cd Open-PS2-Loader
           make clean
-          make download_lng
           make -j$(nproc)
 
-      - name: Upload OPL ELF
-        uses: actions/upload-artifact@v4
+      - name: Upload OPNPS2LD.ELF
+        uses: actions/upload-artifact@v3
         with:
-          name: OPNPS2LD-1907-Unified
+          name: OPL-Unified-2022
           path: Open-PS2-Loader/OPNPS2LD.ELF
-          if-no-files-found: error
