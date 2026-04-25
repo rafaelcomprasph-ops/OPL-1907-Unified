@@ -15,7 +15,16 @@ def patch(fn, s, r):
         print(f"ERRO ao processar {fn}: {e}")
 
 def apply_patches():
-    print("Aplicando patches para OPL 1907 (Unificação de Listas)...")
+    print("Aplicando patches para OPL 1907 (Unificação de Listas + Correção GCC 14)...")
+
+    # Fix GCC 14 compatibility globally in Makefiles
+    patch("Makefile", 
+          "EE_CFLAGS += -Wno-format-truncation -Wno-stringop-truncation", 
+          "EE_CFLAGS += -Wno-format-truncation -Wno-stringop-truncation -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration")
+
+    patch("ee_core/Makefile",
+          "EE_CFLAGS = -D_EE -Os -G0 -Wall $(EE_INCS)",
+          "EE_CFLAGS = -D_EE -Os -G0 -Wall -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration $(EE_INCS)")
 
     # Disable default APP menu
     patch("src/opl.c", 
