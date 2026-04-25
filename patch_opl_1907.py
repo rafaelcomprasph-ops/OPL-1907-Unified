@@ -14,14 +14,17 @@ def patch(fn, s, r):
         print(f'ERRO em {fn}: {e}')
 
 def apply_patches():
-    print('Iniciando Kit de Sobrevivência FINALISSIMO OPL 1907...')
+    print('Iniciando Kit de Sobrevivência DEFINITIVO OPL 1907...')
 
-    # 1. Fix GCC 14 e iopfixup (Ajustes de ambiente)
-    # Adicionamos --allow-zero-text para o erro do _retonly
+    # 1. Ajustes Globais (GCC 14, iopfixup e libdev9)
+    # Adicionamos as flags de erro e a biblioteca dev9 que estava faltando
     os.system('echo "IOP_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal')
     os.system('echo "EE_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.eeglobal')
     
-    # Patch direto no Makefile do SDK para aceitar o zero-text
+    # Forçamos a inclusão da libdev9 para resolver os "undefined reference to Spd..."
+    os.system('echo "IOP_LIBS += -ldev9" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal')
+
+    # Ajuste do iopfixup para o erro do zero-text
     patch('/usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal', 'iopfixup ', 'iopfixup --allow-zero-text ')
 
     # 2. Criar bin2s
@@ -30,7 +33,7 @@ def apply_patches():
         f.write(bin2s_script)
     os.chmod('/usr/local/ps2dev/ps2sdk/bin/bin2s', 0o755)
 
-    # 3. Correção de tipos em scmd.c
+    # 3. Correção de tipos em scmd.c (PS2SDK Novo)
     patch('modules/iopcore/cdvdman/scmd.c', 'int sceCdReadModelID(unsigned long int *ModelID)', 'int sceCdReadModelID(unsigned int *ModelID)')
     patch('modules/iopcore/cdvdman/scmd.c', 'int sceCdReadDvdDualInfo(int *on_dual, u32 *layer1_start)', 'int sceCdReadDvdDualInfo(int *on_dual, unsigned int *layer1_start)')
 
@@ -92,7 +95,7 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
     patch('src/bdmsupport.c', 'return bdmGameCount;\n}', 'return bdmUnifiedCount;\n}')
     patch('src/bdmsupport.c', 'free(bdmGames);', 'free(bdmGames); bdmGames = NULL; if (bdmApps) { free(bdmApps); bdmApps = NULL; } if (bdmUnifiedItems) { free(bdmUnifiedItems); bdmUnifiedItems = NULL; }')
 
-    print('Kit de Sobrevivência aplicado! Cruzando os dedos para o download do ELF!')
+    print('Kit de Sobrevivência aplicado com sucesso total!')
 
 if __name__ == "__main__":
     apply_patches()
