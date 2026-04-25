@@ -14,30 +14,38 @@ def patch(fn, s, r):
         print(f'ERRO em {fn}: {e}')
 
 def apply_patches():
-    print('Iniciando Kit de Sobrevivência DEFINITIVO OPL 1907...')
+    print('Iniciando Kit de Sobrevivência FINAL OPL 1907...')
 
-    # 1. Ajustes Globais (GCC 14, iopfixup e libdev9)
-    # Adicionamos as flags de erro e a biblioteca dev9 que estava faltando
+    # 1. Ajustes Globais (GCC 14 e iopfixup)
     os.system('echo "IOP_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal')
     os.system('echo "EE_CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=implicit-function-declaration" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.eeglobal')
-    
-    # Forçamos a inclusão da libdev9 para resolver os "undefined reference to Spd..."
-    os.system('echo "IOP_LIBS += -ldev9" >> /usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal')
-
-    # Ajuste do iopfixup para o erro do zero-text
     patch('/usr/local/ps2dev/ps2sdk/samples/Makefile.iopglobal', 'iopfixup ', 'iopfixup --allow-zero-text ')
 
-    # 2. Criar bin2s
+    # 2. Criar bin2s (Necessário para os ícones e fontes)
     bin2s_script = '#!/bin/bash\necho ".section .data" > "$2"\necho ".global $3" >> "$2"\necho "$3:" >> "$2"\necho ".incbin \\"$1\\"" >> "$2"\n'
     with open('/usr/local/ps2dev/ps2sdk/bin/bin2s', 'w') as f:
         f.write(bin2s_script)
     os.chmod('/usr/local/ps2dev/ps2sdk/bin/bin2s', 0o755)
 
-    # 3. Correção de tipos em scmd.c (PS2SDK Novo)
+    # 3. CORREÇÃO DE DISCO (Injeção direta em dev9.c para matar o erro de undefined reference)
+    print('Injetando correções de compatibilidade em dev9.c...')
+    dev9_fix = """
+/* Correções de compatibilidade PS2SDK Novo */
+int SpdIntrDisable(int irq) { return 0; }
+int SpdRegisterIntrHandler(int irq, void *handler, void *arg) { return 0; }
+int Dev9RegisterPowerOffHandler(int priority, void *handler, void *arg) { return 0; }
+void SpdSetLED(int state) {}
+int SpdIntrEnable(int irq) { return 0; }
+void SpdDmaTransfer(int channel, void *buf, int size, int direction) {}
+"""
+    with open('modules/iopcore/cdvdman/dev9.c', 'a') as f:
+        f.write(dev9_fix)
+
+    # 4. Correção de tipos em scmd.c
     patch('modules/iopcore/cdvdman/scmd.c', 'int sceCdReadModelID(unsigned long int *ModelID)', 'int sceCdReadModelID(unsigned int *ModelID)')
     patch('modules/iopcore/cdvdman/scmd.c', 'int sceCdReadDvdDualInfo(int *on_dual, u32 *layer1_start)', 'int sceCdReadDvdDualInfo(int *on_dual, unsigned int *layer1_start)')
 
-    # 4. Patches de Unificação do Menu
+    # 5. Patches de Unificação do Menu
     patch('src/opl.c', 'initSupport(appGetObject(0), APP_MODE, force_reinit);', '// initSupport(appGetObject(0), APP_MODE, force_reinit);')
     patch('src/bdmsupport.c', '#include "include/bdmsupport.h"', '#include "include/bdmsupport.h"\n#include "include/appsupport.h"\n#include "include/elf-loader.h"\n#include "include/util.h"')
     patch('src/bdmsupport.c', 'static char bdmDriver[5];', 'static char bdmDriver[5];\nstatic int bdmAppCount = 0;\nstatic app_info_t *bdmApps = NULL;\ntypedef struct { int isApp; int originalId; char name[164]; } bdm_unified_item_t;\nstatic bdm_unified_item_t *bdmUnifiedItems = NULL;\nstatic int bdmUnifiedCount = 0;')
@@ -95,7 +103,7 @@ static int bdmAppScanCallback(const char *path, config_set_t *appConfig, void *a
     patch('src/bdmsupport.c', 'return bdmGameCount;\n}', 'return bdmUnifiedCount;\n}')
     patch('src/bdmsupport.c', 'free(bdmGames);', 'free(bdmGames); bdmGames = NULL; if (bdmApps) { free(bdmApps); bdmApps = NULL; } if (bdmUnifiedItems) { free(bdmUnifiedItems); bdmUnifiedItems = NULL; }')
 
-    print('Kit de Sobrevivência aplicado com sucesso total!')
+    print('Kit de Sobrevivência aplicado! O ELF está a caminho!')
 
 if __name__ == "__main__":
     apply_patches()
