@@ -39,6 +39,7 @@ jobs:
         run: |
           cd Open-PS2-Loader
           make clean
+          make download_lng
           make -j$(nproc)
 
       - name: Upload OPL ELF
